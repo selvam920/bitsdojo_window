@@ -27,6 +27,9 @@ namespace bitsdojo_window {
     BOOL during_size_move = FALSE;
     BOOL dpi_changed_during_size_move = FALSE;
     BOOL is_dpi_aware = FALSE;
+    BOOL startup_center_applied = FALSE;
+    BOOL has_explicit_window_position = FALSE;
+    BOOL first_show_frame_synced = FALSE;
     SIZE min_size = { 0, 0 };
     SIZE max_size = { 0, 0 };
     // Amount to cut when window is maximized
@@ -35,6 +38,13 @@ namespace bitsdojo_window {
     // Forward declarations
     int init();
     void monitorFlutterWindows();
+    void adjustChildWindowSize();
+    void attachToExistingFlutterWindows();
+    void applyMainWindowInitialization(HWND window);
+    void applyChildWindowInitialization();
+    void extendIntoClientArea(HWND hwnd);
+    void fixDPIScaling();
+    void forceChildRefresh();
 
     auto bdw_init = init();
 
@@ -55,6 +65,7 @@ namespace bitsdojo_window {
             }
         }
         monitorFlutterWindows();
+        attachToExistingFlutterWindows();
         return 1;
     }
 
@@ -106,32 +117,111 @@ namespace bitsdojo_window {
         if (code == HCBT_CREATEWND)
         {
             auto createParams = reinterpret_cast<CBT_CREATEWND*>(lparam);
-            if (!createParams->lpcs->lpCreateParams)
+            // lpszClass can be an ATOM (integer) rather than a string pointer;
+            // calling wcscmp on an ATOM would crash.
+            if (!IS_INTRESOURCE(createParams->lpcs->lpszClass))
             {
-                return 0;
-            }
-            if (wcscmp(createParams->lpcs->lpszClass, L"FLUTTER_RUNNER_WIN32_WINDOW") == 0)
-            {
-                flutter_window = (HWND)wparam;
-                SetWindowSubclass(flutter_window, main_window_proc, 1, NULL);
-            }
-            else if (wcscmp(createParams->lpcs->lpszClass, L"FLUTTERVIEW") == 0)
-            {
-                flutter_child_window = (HWND)wparam;
-                SetWindowSubclass(flutter_child_window, child_window_proc, 1, NULL);
+                if (wcscmp(createParams->lpcs->lpszClass, L"FLUTTER_RUNNER_WIN32_WINDOW") == 0)
+                {
+                    flutter_window = (HWND)wparam;
+                    SetWindowSubclass(flutter_window, main_window_proc, 1, NULL);
+                }
+                else if (wcscmp(createParams->lpcs->lpszClass, L"FLUTTERVIEW") == 0)
+                {
+                    flutter_child_window = (HWND)wparam;
+                    SetWindowSubclass(flutter_child_window, child_window_proc, 1, NULL);
+                }
             }
         }
         if ((flutter_window != nullptr) && (flutter_child_window != nullptr))
         {
             UnhookWindowsHookEx(flutterWindowMonitor);
+            flutterWindowMonitor = nullptr;
         }
-        return 0;
+        return CallNextHookEx(flutterWindowMonitor, code, wparam, lparam);
     }
 
     void monitorFlutterWindows()
     {
         DWORD threadID = GetCurrentThreadId();
         flutterWindowMonitor = SetWindowsHookEx(WH_CBT, monitorFlutterWindowsProc, NULL, threadID);
+    }
+
+    BOOL CALLBACK findFlutterChildWindowProc(HWND window, LPARAM lParam)
+    {
+        wchar_t className[64] = {};
+        GetClassNameW(window, className, ARRAYSIZE(className));
+        if (wcscmp(className, L"FLUTTERVIEW") == 0)
+        {
+            flutter_child_window = window;
+            SetWindowSubclass(flutter_child_window, child_window_proc, 1, NULL);
+            applyChildWindowInitialization();
+            return FALSE;
+        }
+        return TRUE;
+    }
+
+    BOOL CALLBACK findFlutterMainWindowProc(HWND window, LPARAM lParam)
+    {
+        DWORD processID = 0;
+        GetWindowThreadProcessId(window, &processID);
+        if (processID != GetCurrentProcessId())
+        {
+            return TRUE;
+        }
+
+        wchar_t className[64] = {};
+        GetClassNameW(window, className, ARRAYSIZE(className));
+        if (wcscmp(className, L"FLUTTER_RUNNER_WIN32_WINDOW") == 0)
+        {
+            flutter_window = window;
+            SetWindowSubclass(flutter_window, main_window_proc, 1, NULL);
+            applyMainWindowInitialization(flutter_window);
+            EnumChildWindows(flutter_window, findFlutterChildWindowProc, 0);
+            if (flutter_child_window != nullptr)
+            {
+                return FALSE;
+            }
+        }
+        return TRUE;
+    }
+
+    void attachToExistingFlutterWindows()
+    {
+        EnumWindows(findFlutterMainWindowProc, 0);
+        if ((flutter_window != nullptr) && (flutter_child_window != nullptr) && (flutterWindowMonitor != nullptr))
+        {
+            UnhookWindowsHookEx(flutterWindowMonitor);
+            flutterWindowMonitor = nullptr;
+        }
+    }
+
+    void applyMainWindowInitialization(HWND window)
+    {
+        auto style = GetWindowLongPtr(window, GWL_STYLE);
+        style = style | WS_CLIPCHILDREN;
+        SetWindowLongPtr(window, GWL_STYLE, style);
+        SetProp(window, L"BitsDojoWindow", (HANDLE)(1));
+
+        if (has_custom_frame == TRUE)
+        {
+            extendIntoClientArea(window);
+            SetWindowPos(window, nullptr, 0, 0, 0, 0,
+                SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+    }
+
+    void applyChildWindowInitialization()
+    {
+        if (flutter_child_window == nullptr)
+            return;
+
+        fixDPIScaling();
+        if ((window_can_be_shown == TRUE) && (flutter_window != nullptr))
+        {
+            adjustChildWindowSize();
+            forceChildRefresh();
+        }
     }
 
     LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam, UINT_PTR subclassID, DWORD_PTR refData);
@@ -329,6 +419,11 @@ namespace bitsdojo_window {
             case WM_CREATE: {
                 LRESULT result = DefSubclassProc(window, message, wparam, lparam);
                 fixDPIScaling();
+                if ((window_can_be_shown == TRUE) && (flutter_window != nullptr))
+                {
+                    adjustChildWindowSize();
+                    forceChildRefresh();
+                }
                 return result;
             }
             case WM_NCHITTEST:
@@ -396,6 +491,18 @@ namespace bitsdojo_window {
         case BDW_SETWINDOWPOS:
         {
             auto param = (SWPParam*)(actionData);
+            if ((param->uFlags & SWP_NOMOVE) == 0)
+            {
+                has_explicit_window_position = TRUE;
+            }
+            // If this is a show command and the window is somehow maximized,
+            // clear the maximize state so it appears at the correct size.
+            if ((param->uFlags & SWP_SHOWWINDOW) && IsZoomed(window))
+            {
+                auto style = GetWindowLongPtr(window, GWL_STYLE);
+                style &= ~WS_MAXIMIZE;
+                SetWindowLongPtr(window, GWL_STYLE, style);
+            }
             SetWindowPos(window, 0, param->x, param->y, param->cx, param->cy, param->uFlags);
             HeapFree(GetProcessHeap(), 0, param);
             break;
@@ -431,6 +538,10 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM wparam, LPAR
         flutter_window = window;
         auto style = GetWindowLongPtr(window, GWL_STYLE);
         style = style | WS_CLIPCHILDREN;
+        if (visible_on_startup == FALSE)
+        {
+            style &= ~WS_VISIBLE;
+        }
         SetWindowLongPtr(window, GWL_STYLE, style);
         SetProp(window, L"BitsDojoWindow", (HANDLE)(1));
         break;
@@ -454,11 +565,26 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM wparam, LPAR
     case WM_CREATE:
     {
         auto createStruct = reinterpret_cast<CREATESTRUCT *>(lparam);
+        // Ensure WS_VISIBLE is stripped before DefSubclassProc so Windows
+        // does not try to show the oversized initial window during creation.
+        if (visible_on_startup == FALSE)
+        {
+            auto style = GetWindowLongPtr(window, GWL_STYLE);
+            style &= ~(WS_VISIBLE | WS_MAXIMIZE);
+            SetWindowLongPtr(window, GWL_STYLE, style);
+        }
         LRESULT result = DefSubclassProc(window, message, wparam, lparam);
+        // Strip again after DefSubclassProc in case it was re-added.
+        if (visible_on_startup == FALSE)
+        {
+            auto style = GetWindowLongPtr(window, GWL_STYLE);
+            style &= ~(WS_VISIBLE | WS_MAXIMIZE);
+            SetWindowLongPtr(window, GWL_STYLE, style);
+        }
         if (has_custom_frame == TRUE)
         {
             extendIntoClientArea(window);
-            SetWindowPos(window, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_DRAWFRAME);
+            SetWindowPos(window, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         }
         centerOnMonitorContainingMouse(window, createStruct->cx, createStruct->cy);
         if (visible_on_startup == TRUE)
@@ -485,19 +611,24 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM wparam, LPAR
         {
             return DefWindowProc(window, message, wparam, lparam);
         }
+        if ((window_can_be_shown == TRUE) && (flutter_child_window != nullptr))
+        {
+            adjustChildWindowSize();
+        }
         break;
     }
     case WM_SYSCOMMAND:
     {
-        if (wparam == SC_MINIMIZE)
+        auto command = (wparam & 0xFFF0);
+        if (command == SC_MINIMIZE)
         {
             during_minimize = TRUE;
         }
-        if (wparam == SC_MAXIMIZE)
+        if (command == SC_MAXIMIZE)
         {
             during_maximize = TRUE;
         }
-        if (wparam == SC_RESTORE)
+        if (command == SC_RESTORE)
         {
             during_restore = TRUE;
         }
@@ -511,11 +642,12 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM wparam, LPAR
     {
         auto winPos = reinterpret_cast<WINDOWPOS *>(lparam);
         bool isResize = !(winPos->flags & SWP_NOSIZE);
+        BOOL isShowWindow = ((winPos->flags & SWP_SHOWWINDOW) == SWP_SHOWWINDOW);
+
         if (has_custom_frame && isResize) {
             adjustMaximizedSize(window, winPos);
             adjustPositionOnRestoreByMove(window, winPos);
         }
-        BOOL isShowWindow = ((winPos->flags & SWP_SHOWWINDOW) == SWP_SHOWWINDOW);
         
         if ((isShowWindow == TRUE) && (window_can_be_shown == FALSE) && (visible_on_startup == FALSE))
         {
@@ -528,22 +660,45 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM wparam, LPAR
     {
         auto winPos = reinterpret_cast<WINDOWPOS*>(lparam);
         bool isResize = !(winPos->flags & SWP_NOSIZE);
-        if (has_custom_frame && isResize) {
-            
-            adjustMaximizedSize(window, winPos);
-            adjustPositionOnRestoreByMove(window, winPos);
-        }
+        BOOL isShowWindow = ((winPos->flags & SWP_SHOWWINDOW) == SWP_SHOWWINDOW);
 
         if (false == window_can_be_shown) {
             break;
         }
 
-        if (bypass_wm_size == TRUE)
+        if (isShowWindow == TRUE && flutter_child_window != nullptr)
         {
-            if (isResize && (!during_minimize) && (winPos->cx != 0))
+            if (first_show_frame_synced == FALSE)
             {
-                adjustChildWindowSize();
+                first_show_frame_synced = TRUE;
+                if (has_custom_frame == TRUE)
+                {
+                    extendIntoClientArea(window);
+                    SetWindowPos(window, nullptr, 0, 0, 0, 0,
+                        SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                }
             }
+
+            if ((visible_on_startup == FALSE) &&
+                (startup_center_applied == FALSE) &&
+                (has_explicit_window_position == FALSE))
+            {
+                RECT currentRect;
+                GetWindowRect(window, &currentRect);
+                centerOnMonitorContainingMouse(
+                    window,
+                    currentRect.right - currentRect.left,
+                    currentRect.bottom - currentRect.top);
+                startup_center_applied = TRUE;
+            }
+
+            adjustChildWindowSize();
+            forceChildRefresh();
+        }
+
+        if (isResize && (!during_minimize) && (winPos->cx != 0))
+        {
+            adjustChildWindowSize();
         }
         break;
     }

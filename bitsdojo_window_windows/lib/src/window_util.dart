@@ -11,7 +11,23 @@ const WPARAM BDW_FORCECHILDREFRESH = WPARAM(3);
 
 base class SWPParam extends Struct {
   @Int32()
-  external int x, y, cx, cy, uFlags;
+  external int x;
+
+  @Int32()
+  external int y;
+
+  @Int32()
+  external int cx;
+
+  @Int32()
+  external int cy;
+
+  @Uint32()
+  external int uFlags;
+}
+
+base class SWTParam extends Struct {
+  external Pointer<Utf16> text;
 }
 
 void setWindowPos(HWND hWnd, int hWndInsertAfter, int x, int y, int cx, int cy, int uFlags) {
@@ -22,11 +38,8 @@ void setWindowPos(HWND hWnd, int hWndInsertAfter, int x, int y, int cx, int cy, 
     ..cx = cx
     ..cy = cy
     ..uFlags = uFlags;
-  PostMessage(hWnd, WM_BDW_ACTION, BDW_SETWINDOWPOS, LPARAM(param.address));
-}
 
-base class SWTParam extends Struct {
-  external Pointer<Utf16> text;
+  PostMessage(hWnd, WM_BDW_ACTION, BDW_SETWINDOWPOS, LPARAM(param.address));
 }
 
 void setWindowText(HWND hWnd, String text) {
@@ -36,5 +49,6 @@ void setWindowText(HWND hWnd, String text) {
 }
 
 void forceChildRefresh(HWND hWnd) {
+  // Use async dispatch to avoid re-entering Flutter's frame scheduler.
   PostMessage(hWnd, WM_BDW_ACTION, BDW_FORCECHILDREFRESH, LPARAM(0));
 }

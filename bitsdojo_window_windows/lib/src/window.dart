@@ -13,8 +13,8 @@ import './window_util.dart';
 var isInsideDoWhenWindowReady = false;
 
 bool isValidHandle(HWND? handle, String operation) {
-  if (handle == null) {
-    print("Could not $operation - handle is null");
+  if (handle == null || handle.address == 0) {
+    print("Could not $operation - handle is null or invalid");
     return false;
   }
   return true;
@@ -24,7 +24,7 @@ Rect getScreenRectForWindow(HWND handle) {
   HMONITOR monitor = MonitorFromWindow(handle, MONITOR_DEFAULTTONEAREST);
   final monitorInfo = calloc<MONITORINFO>()..ref.cbSize = sizeOf<MONITORINFO>();
   final result = GetMonitorInfo(monitor, monitorInfo);
-  if (result == TRUE) {
+  if (result) {
     return Rect.fromLTRB(monitorInfo.ref.rcWork.left.toDouble(), monitorInfo.ref.rcWork.top.toDouble(),
         monitorInfo.ref.rcWork.right.toDouble(), monitorInfo.ref.rcWork.bottom.toDouble());
   }
@@ -52,19 +52,35 @@ class WinWindow extends WinDesktopWindow {
     _alignment = Alignment.center;
   }
 
+  HWND? _resolveHandle() {
+    final currentHandle = handle;
+    if (currentHandle != null && currentHandle.address != 0) {
+      return currentHandle;
+    }
+
+    final nativeHandle = HWND(native.getAppWindow());
+    if (nativeHandle.address != 0) {
+      handle = nativeHandle;
+      return nativeHandle;
+    }
+    return currentHandle;
+  }
+
   Rect get rect {
-    if (!isValidHandle(handle, "get rectangle")) return Rect.zero;
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "get rectangle")) return Rect.zero;
     final winRect = calloc<RECT>();
-    GetWindowRect(handle!, winRect);
+    GetWindowRect(hwnd!, winRect);
     Rect result = winRect.ref.toRect;
     calloc.free(winRect);
     return result;
   }
 
   set rect(Rect newRect) {
-    if (!isValidHandle(handle, "set rectangle")) return;
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "set rectangle")) return;
     setWindowPos(
-        handle!, 0, newRect.left.toInt(), newRect.top.toInt(), newRect.width.toInt(), newRect.height.toInt(), 0);
+        hwnd!, 0, newRect.left.toInt(), newRect.top.toInt(), newRect.width.toInt(), newRect.height.toInt(), 0);
   }
 
   Size get size {
@@ -95,8 +111,9 @@ class WinWindow extends WinDesktopWindow {
   }
 
   int get dpi {
-    if (!dpiAware || !isValidHandle(handle, "get dpi")) return _defaultDpi;
-    final windowDpi = GetDpiForWindow(handle!);
+    final hwnd = _resolveHandle();
+    if (!dpiAware || !isValidHandle(hwnd, "get dpi")) return _defaultDpi;
+    final windowDpi = GetDpiForWindow(hwnd!);
     if (windowDpi <= 0) {
       return _defaultDpi;
     }
@@ -163,8 +180,9 @@ class WinWindow extends WinDesktopWindow {
     final sizeOnScreen = this.sizeOnScreen;
     _alignment = newAlignment;
     if (_alignment != null) {
-      if (!isValidHandle(handle, "set alignment")) return;
-      final screenRect = getScreenRectForWindow(handle!);
+      final hwnd = _resolveHandle();
+      if (!isValidHandle(hwnd, "set alignment")) return;
+      final screenRect = getScreenRectForWindow(hwnd!);
       final rectOnScreen = getRectOnScreen(sizeOnScreen, _alignment!, screenRect);
       this.rect = rectOnScreen;
     }
@@ -189,7 +207,8 @@ class WinWindow extends WinDesktopWindow {
   }
 
   set size(Size newSize) {
-    if (!isValidHandle(handle, "set size")) return;
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "set size")) return;
 
     var width = newSize.width;
 
@@ -214,17 +233,18 @@ class WinWindow extends WinDesktopWindow {
     Size sizeToSet = Size(width, height);
     _sizeSetFromDart = sizeToSet;
     if (_alignment == null) {
-      SetWindowPos(handle!, null, 0, 0, sizeToSet.width.toInt(), sizeToSet.height.toInt(), SWP_NOMOVE);
+      SetWindowPos(hwnd!, null, 0, 0, sizeToSet.width.toInt(), sizeToSet.height.toInt(), SWP_NOMOVE);
     } else {
       final sizeOnScreen = getSizeOnScreen((sizeToSet));
-      final screenRect = getScreenRectForWindow(handle!);
+      final screenRect = getScreenRectForWindow(hwnd!);
       this.rect = getRectOnScreen(sizeOnScreen, _alignment!, screenRect);
     }
   }
 
   bool get isMaximized {
-    if (!isValidHandle(handle, "get isMaximized")) return false;
-    return (IsZoomed(handle!) == 1);
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "get isMaximized")) return false;
+    return IsZoomed(hwnd!);
   }
 
   @Deprecated("use isVisible instead")
@@ -233,7 +253,9 @@ class WinWindow extends WinDesktopWindow {
   }
 
   bool get isVisible {
-    return (IsWindowVisible(handle!) == 1);
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "get isVisible")) return false;
+    return IsWindowVisible(hwnd!);
   }
 
   Offset get position {
@@ -242,19 +264,22 @@ class WinWindow extends WinDesktopWindow {
   }
 
   set position(Offset newPosition) {
-    if (!isValidHandle(handle, "set position")) return;
-    SetWindowPos(handle!, null, newPosition.dx.toInt(), newPosition.dy.toInt(), 0, 0, SWP_NOSIZE);
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "set position")) return;
+    SetWindowPos(hwnd!, null, newPosition.dx.toInt(), newPosition.dy.toInt(), 0, 0, SWP_NOSIZE);
   }
 
   void show() {
-    if (!isValidHandle(handle, "show")) return;
-    setWindowPos(handle!, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW);
-    forceChildRefresh(handle!);
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "show")) return;
+    setWindowPos(hwnd!, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW);
+    forceChildRefresh(hwnd);
   }
 
   void hide() {
-    if (!isValidHandle(handle, "hide")) return;
-    SetWindowPos(handle!, null, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_HIDEWINDOW);
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "hide")) return;
+    SetWindowPos(hwnd!, null, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_HIDEWINDOW);
   }
 
   @Deprecated("use show()/hide() instead")
@@ -267,29 +292,34 @@ class WinWindow extends WinDesktopWindow {
   }
 
   void close() {
-    if (!isValidHandle(handle, "close")) return;
-    PostMessage(handle!, WM_SYSCOMMAND, WPARAM(SC_CLOSE), LPARAM(0));
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "close")) return;
+    PostMessage(hwnd!, WM_SYSCOMMAND, WPARAM(SC_CLOSE), LPARAM(0));
   }
 
   void maximize() {
-    if (!isValidHandle(handle, "maximize")) return;
-    PostMessage(handle!, WM_SYSCOMMAND, WPARAM(SC_MAXIMIZE), LPARAM(0));
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "maximize")) return;
+    PostMessage(hwnd!, WM_SYSCOMMAND, WPARAM(SC_MAXIMIZE), LPARAM(0));
   }
 
   void minimize() {
-    if (!isValidHandle(handle, "minimize")) return;
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "minimize")) return;
 
-    PostMessage(handle!, WM_SYSCOMMAND, WPARAM(SC_MINIMIZE), LPARAM(0));
+    PostMessage(hwnd!, WM_SYSCOMMAND, WPARAM(SC_MINIMIZE), LPARAM(0));
   }
 
   void restore() {
-    if (!isValidHandle(handle, "restore")) return;
-    PostMessage(handle!, WM_SYSCOMMAND, WPARAM(SC_RESTORE), LPARAM(0));
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "restore")) return;
+    PostMessage(hwnd!, WM_SYSCOMMAND, WPARAM(SC_RESTORE), LPARAM(0));
   }
 
   void maximizeOrRestore() {
-    if (!isValidHandle(handle, "maximizeOrRestore")) return;
-    if (IsZoomed(handle!) == 1) {
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "maximizeOrRestore")) return;
+    if (IsZoomed(hwnd!)) {
       this.restore();
     } else {
       this.maximize();
@@ -297,8 +327,9 @@ class WinWindow extends WinDesktopWindow {
   }
 
   set title(String newTitle) {
-    if (!isValidHandle(handle, "set title")) return;
-    setWindowText(handle!, newTitle);
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "set title")) return;
+    setWindowText(hwnd!, newTitle);
   }
 
   void startDragging() {

@@ -12,8 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
   bitsdojo_window_platform_interface:
-    ^0.1.2
-    #path: ../bitsdojo_window_platform_interface
+    path: ../bitsdojo_window_platform_interface
   ffi: ^2.2.0
 
 dev_dependencies:

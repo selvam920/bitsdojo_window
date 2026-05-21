@@ -17,9 +17,10 @@ bool isBitsdojoWindowLoaded() {
 }
 
 // getAppWindow
-typedef IntPtr TGetAppWindow();
-typedef DGetAppWindow = int Function();
-final Pointer<NativeFunction<TGetAppWindow>> getAppWindow = _publicAPI.ref.getAppWindow;
+typedef Pointer<NativeType> TGetAppWindow();
+typedef DGetAppWindow = Pointer<NativeType> Function();
+final DGetAppWindow _getAppWindow = _publicAPI.ref.getAppWindow.asFunction();
+Pointer<NativeType> getAppWindow() => _getAppWindow();
 
 // isDPIAware
 typedef Int8 TIsDPIAware();

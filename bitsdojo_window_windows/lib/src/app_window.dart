@@ -15,18 +15,26 @@ class BitsDojoNotInitializedException implements Exception {
 
 class WinAppWindow extends WinWindow {
   WinAppWindow._() {
-    super.handle = HWND(getAppWindow);
     final isLoaded = isBitsdojoWindowLoaded();
     if (!isLoaded) {
       print(notInitializedMessage);
       throw BitsDojoNotInitializedException;
     }
-    assert(handle != null, "Could not get Flutter window");
+    _refreshHandle();
+    assert(handle != null && handle!.address != 0, "Could not get Flutter window");
+  }
+
+  void _refreshHandle() {
+    final nativeHandle = HWND(getAppWindow());
+    if (nativeHandle.address != 0) {
+      super.handle = nativeHandle;
+    }
   }
 
   static final WinAppWindow _instance = WinAppWindow._();
 
   factory WinAppWindow() {
+    _instance._refreshHandle();
     return _instance;
   }
 }

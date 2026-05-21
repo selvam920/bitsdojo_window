@@ -5,9 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:bitsdojo_window/bitsdojo_window.dart';
 
 void main() {
-  appWindow.size = const Size(600, 450);
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
-  appWindow.show();
   doWhenWindowReady(() {
     final win = appWindow;
     const initialSize = Size(600, 450);
@@ -15,7 +14,9 @@ void main() {
     win.size = initialSize;
     win.alignment = Alignment.center;
     win.title = "Custom window with Flutter";
-    win.show();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      win.show();
+    });
   });
 }
 
