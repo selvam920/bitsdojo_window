@@ -32,6 +32,9 @@ Rect getScreenRectForWindow(HWND handle) {
 }
 
 class WinWindow extends WinDesktopWindow {
+  static const int _defaultDpi = 96;
+  static const double _defaultScaleFactor = 1.0;
+
   static final dpiAware = native.isDPIAware();
   HWND? handle;
   Size? _minSize;
@@ -92,12 +95,19 @@ class WinWindow extends WinDesktopWindow {
   }
 
   int get dpi {
-    if (!dpiAware || !isValidHandle(handle, "get dpi")) return 96;
-    return GetDpiForWindow(handle!);
+    if (!dpiAware || !isValidHandle(handle, "get dpi")) return _defaultDpi;
+    final windowDpi = GetDpiForWindow(handle!);
+    if (windowDpi <= 0) {
+      return _defaultDpi;
+    }
+    return windowDpi;
   }
 
   double get scaleFactor {
-    double result = this.dpi / 96.0;
+    final result = this.dpi / _defaultDpi;
+    if (!result.isFinite || result <= 0) {
+      return _defaultScaleFactor;
+    }
     return result;
   }
 
@@ -111,6 +121,9 @@ class WinWindow extends WinDesktopWindow {
     double cxPaddedBorder = systemMetric(SM_CXPADDEDBORDER, dpiToUse: dpiToUse).toDouble();
     cxPaddedBorder = (cxPaddedBorder / scaleFactor).ceilToDouble();
     double result = cySizeFrame + cyCaption + cxPaddedBorder;
+    if (!result.isFinite || result <= 0) {
+      return 32.0;
+    }
     return result;
   }
 
@@ -120,6 +133,12 @@ class WinWindow extends WinDesktopWindow {
     double cyCaption = systemMetric(SM_CYCAPTION).toDouble();
     cyCaption /= scaleFactor;
     double width = cyCaption * 2;
+    if (!width.isFinite || width <= 0) {
+      width = 46.0;
+    }
+    if (!height.isFinite || height <= 0) {
+      height = 30.0;
+    }
     return Size(width, height);
   }
 

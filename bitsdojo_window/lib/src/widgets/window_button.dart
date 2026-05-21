@@ -81,6 +81,13 @@ class WindowButton extends StatelessWidget {
     return colors.iconNormal;
   }
 
+  double _finiteOrDefault(double value, double fallback) {
+    if (!value.isFinite || value.isNaN) {
+      return fallback;
+    }
+    return value;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (kIsWeb) {
@@ -91,7 +98,9 @@ class WindowButton extends StatelessWidget {
         return Container();
       }
     }
-    final buttonSize = appWindow.titleBarButtonSize;
+    final rawButtonSize = appWindow.titleBarButtonSize;
+    final buttonWidth = _finiteOrDefault(rawButtonSize.width, 46.0).clamp(1.0, double.infinity).toDouble();
+    final buttonHeight = _finiteOrDefault(rawButtonSize.height, 30.0).clamp(1.0, double.infinity).toDouble();
     return MouseStateBuilder(
       builder: (context, mouseState) {
         WindowButtonContext buttonContext = WindowButtonContext(
@@ -101,8 +110,9 @@ class WindowButton extends StatelessWidget {
             iconColor: getIconColor(mouseState));
 
         var icon = (this.iconBuilder != null) ? this.iconBuilder!(buttonContext) : Container();
-        double borderSize = appWindow.borderSize;
-        double defaultPadding = (appWindow.titleBarHeight - borderSize) / 3 - (borderSize / 2);
+        final borderSize = _finiteOrDefault(appWindow.borderSize, 1.0).clamp(0.0, double.infinity).toDouble();
+        final titleBarHeight = _finiteOrDefault(appWindow.titleBarHeight, 32.0).clamp(1.0, double.infinity).toDouble();
+        final defaultPadding = ((titleBarHeight - borderSize) / 3 - (borderSize / 2)).clamp(0.0, double.infinity).toDouble();
         // Used when buttonContext.backgroundColor is null, allowing the AnimatedContainer to fade-out smoothly.
         var fadeOutColor = getBackgroundColor(MouseState()..isMouseOver = true).withValues(alpha: 0);
         var padding = this.padding ?? EdgeInsets.all(defaultPadding);
@@ -114,7 +124,7 @@ class WindowButton extends StatelessWidget {
             color: buttonContext.backgroundColor ?? fadeOutColor,
             child: iconWithPadding);
         var button = (this.builder != null) ? this.builder!(buttonContext, icon) : iconWithPadding;
-        return SizedBox(width: buttonSize.width, height: buttonSize.height, child: button);
+        return SizedBox(width: buttonWidth, height: buttonHeight, child: button);
       },
       onPressed: () {
         if (this.onPressed != null) this.onPressed!();
