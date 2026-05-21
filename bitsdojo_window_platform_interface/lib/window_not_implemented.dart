@@ -1,10 +1,9 @@
 import 'package:flutter/rendering.dart';
-import 'package:win32/win32.dart';
 
 import './window.dart';
 
 class NotImplementedWindow extends DesktopWindow {
-  HWND get handle {
+  Object? get handle {
     throw UnimplementedError('handle getter has not been implemented');
   }
 
