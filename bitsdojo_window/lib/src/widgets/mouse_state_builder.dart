@@ -43,29 +43,31 @@ class _MouseStateBuilderState extends State<MouseStateBuilder> {
             _mouseState.isMouseOver = false;
           });
         },
-        child: GestureDetector(
-            onTapDown: (_) {
-              setState(() {
-                _mouseState.isMouseDown = true;
-              });
-            },
-            onTapCancel: () {
-              setState(() {
-                _mouseState.isMouseDown = false;
-              });
-            },
-            onTap: () {
-              setState(() {
-                _mouseState.isMouseDown = false;
-                _mouseState.isMouseOver = false;
-              });
-              _ambiguate(WidgetsBinding.instance)!.addPostFrameCallback((_) {
-                if (widget.onPressed != null) {
-                  widget.onPressed!();
-                }
-              });
-            },
-            onTapUp: (_) {},
-            child: widget.builder(context, _mouseState)));
+        child: Align(
+          child: GestureDetector(
+              onTapDown: (_) {
+                setState(() {
+                  _mouseState.isMouseDown = true;
+                });
+              },
+              onTapCancel: () {
+                setState(() {
+                  _mouseState.isMouseDown = false;
+                });
+              },
+              onTap: () {
+                setState(() {
+                  _mouseState.isMouseDown = false;
+                  _mouseState.isMouseOver = false;
+                });
+                _ambiguate(WidgetsBinding.instance)!.addPostFrameCallback((_) {
+                  if (widget.onPressed != null) {
+                    widget.onPressed!();
+                  }
+                });
+              },
+              onTapUp: (_) {},
+              child: widget.builder(context, _mouseState)),
+        ));
   }
 }
