@@ -55,6 +55,10 @@ class NotImplementedWindow extends DesktopWindow {
     throw UnimplementedError('show() has not been implemented.');
   }
 
+  void showAndMaximize() {
+    throw UnimplementedError('showAndMaximize() has not been implemented.');
+  }
+
   void hide() {
     throw UnimplementedError('hide() has not been implemented.');
   }

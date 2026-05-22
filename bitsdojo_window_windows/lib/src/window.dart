@@ -276,6 +276,13 @@ class WinWindow extends WinDesktopWindow {
     forceChildRefresh(hwnd);
   }
 
+  void showAndMaximize() {
+    final hwnd = _resolveHandle();
+    if (!isValidHandle(hwnd, "showAndMaximize")) return;
+    PostMessage(hwnd!, WM_SYSCOMMAND, WPARAM(SC_MAXIMIZE), LPARAM(0));
+    forceChildRefresh(hwnd);
+  }
+
   void hide() {
     final hwnd = _resolveHandle();
     if (!isValidHandle(hwnd, "hide")) return;

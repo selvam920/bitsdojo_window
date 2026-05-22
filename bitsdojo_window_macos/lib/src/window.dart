@@ -198,6 +198,18 @@ class MacOSWindow extends DesktopWindow {
     }
   }
 
+  void showAndMaximize() {
+    if (!isValidHandle(handle, "showAndMaximize")) return;
+    maximizeWindow(handle!);
+    showWindow(handle!);
+    if (_setTitleOnNextShow) {
+      _setTitleOnNextShow = false;
+      if (_titleToSet != null) {
+        setWindowTitle(handle!, _titleToSet!);
+      }
+    }
+  }
+
   void hide() {
     if (!isValidHandle(handle, "hide")) return;
     hideWindow(handle!);

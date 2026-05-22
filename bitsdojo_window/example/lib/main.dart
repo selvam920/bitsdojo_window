@@ -15,7 +15,7 @@ void main() {
     win.alignment = Alignment.center;
     win.title = "Custom window with Flutter";
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      win.show();
+      win.showAndMaximize();
     });
   });
 }

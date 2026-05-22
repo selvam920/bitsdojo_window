@@ -28,6 +28,7 @@ abstract class DesktopWindow {
   @Deprecated("use show()/hide() instead")
   set visible(bool isVisible);
   void show();
+  void showAndMaximize();
   void hide();
   void close();
   void minimize();

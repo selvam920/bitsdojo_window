@@ -269,6 +269,13 @@ class GtkWindow extends DesktopWindow {
   }
 
   @override
+  void showAndMaximize() {
+    if (!isValidHandle(handle, "showAndMaximize")) return;
+    native.maximizeWindow(handle!);
+    native.showWindow(handle!);
+  }
+
+  @override
   void hide() {
     if (!isValidHandle(handle, "hide")) return;
     native.hideWindow(handle!);
