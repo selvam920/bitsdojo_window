@@ -28,11 +28,20 @@ class BitsdojoWindowWindows extends BitsdojoWindowPlatform {
     }
   }
 
+  // Cap the wait so a stalled raster thread (GPU/driver hiccup, RDP, TDR) can't leave BDW_HIDE_ON_STARTUP hiding the window forever.
+  Future<void> _waitForFirstFrameOrTimeout() {
+    return _ambiguate(WidgetsBinding.instance)!
+        .waitUntilFirstFrameRasterized
+        .timeout(const Duration(seconds: 3), onTimeout: () {
+      debugPrint(
+        'bitsdojo_window: first frame not rasterized within 3s, showing window anyway',
+      );
+    });
+  }
+
   @override
   void doWhenWindowReady(VoidCallback callback) {
-    _ambiguate(WidgetsBinding.instance)!
-        .waitUntilFirstFrameRasterized
-        .then((value) async {
+    _waitForFirstFrameOrTimeout().then((value) async {
       await _waitForNativeWindowHandle();
       isInsideDoWhenWindowReady = true;
       setWindowCanBeShown(true);
