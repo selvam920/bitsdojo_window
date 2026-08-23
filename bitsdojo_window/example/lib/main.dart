@@ -1,7 +1,7 @@
 // Don't forget to make the changes mentioned in
 // https://github.com/bitsdojo/bitsdojo_window#getting-started
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:bitsdojo_window/bitsdojo_window.dart';
 
 void main() {

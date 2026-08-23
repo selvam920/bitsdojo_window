@@ -6,7 +6,7 @@ auto bdw = bitsdojo_window_configure(BDW_CUSTOM_FRAME | BDW_HIDE_ON_STARTUP);
 
 */
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:bitsdojo_window/bitsdojo_window.dart';
 
 class AppSkin {

@@ -29,3 +29,4 @@ dependencies:
     path: ../bitsdojo_window_macos
   bitsdojo_window_linux:
     path: ../bitsdojo_window_linux
+  material_ui: any
